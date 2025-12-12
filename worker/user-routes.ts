@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
 import type { Env } from "./core-utils";
 import { ProjectEntity } from "./entities";
 import { ok, bad, notFound } from "./core-utils";
@@ -24,13 +23,20 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     return ok(c, page.items);
   });
   // POST /api/projects - Create a new project
-  app.post("/api/projects", zValidator("json", projectSchema), async (c) => {
-    const newProjectData = c.req.valid("json");
-    const project = await ProjectEntity.create(c.env, {
-      id: crypto.randomUUID(),
-      ...newProjectData,
-    });
-    return ok(c, project);
+  app.post("/api/projects", async (c) => {
+    try {
+      const newProjectData = projectSchema.parse(await c.req.json());
+      const project = await ProjectEntity.create(c.env, {
+        id: crypto.randomUUID(),
+        ...newProjectData,
+      });
+      return ok(c, project);
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        return bad(c, e.errors.map((err) => err.message).join("; "));
+      }
+      return bad(c, "Invalid project data");
+    }
   });
   // GET /api/projects/:id - Get a single project
   app.get("/api/projects/:id", async (c) => {
@@ -42,20 +48,26 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     return ok(c, await project.getState());
   });
   // PUT /api/projects/:id - Update a project
-  app.put(
-    "/api/projects/:id",
-    zValidator("json", projectSchema),
-    async (c) => {
-      const { id } = c.req.param();
-      const updatedData = c.req.valid("json");
+  app.put("/api/projects/:id", async (c) => {
+    const { id } = c.req.param();
+    try {
+      const updatedData = projectSchema.parse(await c.req.json());
       const project = new ProjectEntity(c.env, id);
       if (!(await project.exists())) {
         return notFound(c, "Project not found");
       }
-      const updatedProject = await project.mutate((s) => ({ ...s, ...updatedData }));
+      const updatedProject = await project.mutate((s) => ({
+        ...s,
+        ...updatedData,
+      }));
       return ok(c, updatedProject);
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        return bad(c, e.errors.map((err) => err.message).join("; "));
+      }
+      return bad(c, "Invalid project data");
     }
-  );
+  });
   // DELETE /api/projects/:id - Delete a project
   app.delete("/api/projects/:id", async (c) => {
     const { id } = c.req.param();
