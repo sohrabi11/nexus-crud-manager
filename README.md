@@ -1,6 +1,6 @@
 # Nexus CRUD Manager
 
-[![Deploy to Cloudflare][cloudflarebutton]]
+[![Deploy to Cloudflare][![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sohrabi11/nexus-crud-manager)]
 
 A visually stunning, production-ready CRUD (Create, Read, Update, Delete) management dashboard built on Cloudflare Workers and Durable Objects. Manage projects with fields like Name, Status, Priority, Budget, and Due Date. Features a sleek glass-morphic design, responsive data grid, interactive slide-over forms, and a dashboard with analytics.
 
@@ -77,7 +77,7 @@ Prerequisites:
 
 The app uses a single `GlobalDurableObject` binding (pre-configured). Assets are served as SPA.
 
-[![Deploy to Cloudflare][cloudflarebutton]]
+[![Deploy to Cloudflare][![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sohrabi11/nexus-crud-manager)]
 
 ## Architecture
 
