@@ -1,75 +1,68 @@
 import { Hono } from "hono";
-import type { Env } from './core-utils';
-import { UserEntity, ChatBoardEntity } from "./entities";
-import { ok, bad, notFound, isStr } from './core-utils';
-
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
+import type { Env } from "./core-utils";
+import { ProjectEntity } from "./entities";
+import { ok, bad, notFound } from "./core-utils";
+import { projectStatuses, projectPriorities } from "@shared/types";
+const projectSchema = z.object({
+  name: z.string().min(3, "Name must be at least 3 characters"),
+  status: z.enum(projectStatuses),
+  priority: z.enum(projectPriorities),
+  budget: z.number().positive("Budget must be a positive number"),
+  dueDate: z.string().datetime("Invalid due date format"),
+});
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
-  app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
-
-  // USERS
-  app.get('/api/users', async (c) => {
-    await UserEntity.ensureSeed(c.env);
-    const cq = c.req.query('cursor');
-    const lq = c.req.query('limit');
-    const page = await UserEntity.list(c.env, cq ?? null, lq ? Math.max(1, (Number(lq) | 0)) : undefined);
-    return ok(c, page);
+  // Ensure seed data is present on first load
+  app.use("/api/projects/*", async (c, next) => {
+    await ProjectEntity.ensureSeed(c.env);
+    await next();
   });
-
-  app.post('/api/users', async (c) => {
-    const { name } = (await c.req.json()) as { name?: string };
-    if (!name?.trim()) return bad(c, 'name required');
-    return ok(c, await UserEntity.create(c.env, { id: crypto.randomUUID(), name: name.trim() }));
+  // GET /api/projects - List all projects
+  app.get("/api/projects", async (c) => {
+    const page = await ProjectEntity.list(c.env);
+    return ok(c, page.items);
   });
-
-  // CHATS
-  app.get('/api/chats', async (c) => {
-    await ChatBoardEntity.ensureSeed(c.env);
-    const cq = c.req.query('cursor');
-    const lq = c.req.query('limit');
-    const page = await ChatBoardEntity.list(c.env, cq ?? null, lq ? Math.max(1, (Number(lq) | 0)) : undefined);
-    return ok(c, page);
+  // POST /api/projects - Create a new project
+  app.post("/api/projects", zValidator("json", projectSchema), async (c) => {
+    const newProjectData = c.req.valid("json");
+    const project = await ProjectEntity.create(c.env, {
+      id: crypto.randomUUID(),
+      ...newProjectData,
+    });
+    return ok(c, project);
   });
-
-  app.post('/api/chats', async (c) => {
-    const { title } = (await c.req.json()) as { title?: string };
-    if (!title?.trim()) return bad(c, 'title required');
-    const created = await ChatBoardEntity.create(c.env, { id: crypto.randomUUID(), title: title.trim(), messages: [] });
-    return ok(c, { id: created.id, title: created.title });
+  // GET /api/projects/:id - Get a single project
+  app.get("/api/projects/:id", async (c) => {
+    const { id } = c.req.param();
+    const project = new ProjectEntity(c.env, id);
+    if (!(await project.exists())) {
+      return notFound(c, "Project not found");
+    }
+    return ok(c, await project.getState());
   });
-
-  // MESSAGES
-  app.get('/api/chats/:chatId/messages', async (c) => {
-    const chat = new ChatBoardEntity(c.env, c.req.param('chatId'));
-    if (!await chat.exists()) return notFound(c, 'chat not found');
-    return ok(c, await chat.listMessages());
-  });
-
-  app.post('/api/chats/:chatId/messages', async (c) => {
-    const chatId = c.req.param('chatId');
-    const { userId, text } = (await c.req.json()) as { userId?: string; text?: string };
-    if (!isStr(userId) || !text?.trim()) return bad(c, 'userId and text required');
-    const chat = new ChatBoardEntity(c.env, chatId);
-    if (!await chat.exists()) return notFound(c, 'chat not found');
-    return ok(c, await chat.sendMessage(userId, text.trim()));
-  });
-
-  // DELETE: Users
-  app.delete('/api/users/:id', async (c) => ok(c, { id: c.req.param('id'), deleted: await UserEntity.delete(c.env, c.req.param('id')) }));
-
-  app.post('/api/users/deleteMany', async (c) => {
-    const { ids } = (await c.req.json()) as { ids?: string[] };
-    const list = ids?.filter(isStr) ?? [];
-    if (list.length === 0) return bad(c, 'ids required');
-    return ok(c, { deletedCount: await UserEntity.deleteMany(c.env, list), ids: list });
-  });
-
-  // DELETE: Chats
-  app.delete('/api/chats/:id', async (c) => ok(c, { id: c.req.param('id'), deleted: await ChatBoardEntity.delete(c.env, c.req.param('id')) }));
-
-  app.post('/api/chats/deleteMany', async (c) => {
-    const { ids } = (await c.req.json()) as { ids?: string[] };
-    const list = ids?.filter(isStr) ?? [];
-    if (list.length === 0) return bad(c, 'ids required');
-    return ok(c, { deletedCount: await ChatBoardEntity.deleteMany(c.env, list), ids: list });
+  // PUT /api/projects/:id - Update a project
+  app.put(
+    "/api/projects/:id",
+    zValidator("json", projectSchema),
+    async (c) => {
+      const { id } = c.req.param();
+      const updatedData = c.req.valid("json");
+      const project = new ProjectEntity(c.env, id);
+      if (!(await project.exists())) {
+        return notFound(c, "Project not found");
+      }
+      const updatedProject = await project.mutate((s) => ({ ...s, ...updatedData }));
+      return ok(c, updatedProject);
+    }
+  );
+  // DELETE /api/projects/:id - Delete a project
+  app.delete("/api/projects/:id", async (c) => {
+    const { id } = c.req.param();
+    const deleted = await ProjectEntity.delete(c.env, id);
+    if (!deleted) {
+      return notFound(c, "Project not found");
+    }
+    return ok(c, { id, deleted: true });
   });
 }

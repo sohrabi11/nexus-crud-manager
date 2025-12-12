@@ -39,6 +39,14 @@ import {
   projectPriorities,
   projectStatuses,
 } from "@shared/types";
+export const projectSchema = z.object({
+  name: z.string().min(3, "Name must be at least 3 characters long."),
+  status: z.enum(projectStatuses),
+  priority: z.enum(projectPriorities),
+  budget: z.coerce.number().positive("Budget must be a positive number."),
+  dueDate: z.date({ required_error: "A due date is required." }),
+});
+type ProjectFormValues = z.infer<typeof projectSchema>;
 interface ProjectFormProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
@@ -53,14 +61,6 @@ export function ProjectForm({
   defaultValues,
   isSubmitting,
 }: ProjectFormProps) {
-  const projectSchema = z.object({
-    name: z.string().min(3, "Name must be at least 3 characters long."),
-    status: z.enum(projectStatuses),
-    priority: z.enum(projectPriorities),
-    budget: z.coerce.number().min(1, "Budget must be a positive number."),
-    dueDate: z.date(),
-  });
-  type ProjectFormValues = z.infer<typeof projectSchema>;
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
     defaultValues: defaultValues

@@ -1,138 +1,250 @@
-// Home page of the app.
-// Currently a demo placeholder "please wait" screen.
-// Replace this file with your actual app UI. Do not delete it to use some other file as homepage. Simply replace the entire contents of this file.
-
-import { useEffect, useMemo, useState } from 'react'
-import { Sparkles } from 'lucide-react'
-
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { HAS_TEMPLATE_DEMO, TemplateDemo } from '@/components/TemplateDemo'
-import { Button } from '@/components/ui/button'
-import { Toaster, toast } from '@/components/ui/sonner'
-
-function formatDuration(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000))
-  const m = Math.floor(total / 60)
-  const s = total % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
+import { useQuery } from "@tanstack/react-query";
+import {
+  DollarSign,
+  Activity,
+  CheckCircle,
+  FolderKanban,
+  ArrowUpRight,
+} from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+} from "recharts";
+import { format, parseISO } from "date-fns";
+import { AppLayout } from "@/components/layout/AppLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { api } from "@/lib/api-client";
+import { Project } from "@shared/types";
+import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
+const fetchProjects = async (): Promise<Project[]> => {
+  return api<Project[]>("/api/projects");
+};
+const StatCard = ({
+  title,
+  value,
+  icon: Icon,
+  description,
+}: {
+  title: string;
+  value: string;
+  icon: React.ElementType;
+  description: string;
+}) => (
+  <Card>
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      <Icon className="h-4 w-4 text-muted-foreground" />
+    </CardHeader>
+    <CardContent>
+      <div className="text-2xl font-bold">{value}</div>
+      <p className="text-xs text-muted-foreground">{description}</p>
+    </CardContent>
+  </Card>
+);
 export function HomePage() {
-  const [coins, setCoins] = useState(0)
-  const [isRunning, setIsRunning] = useState(false)
-  const [startedAt, setStartedAt] = useState<number | null>(null)
-  const [elapsedMs, setElapsedMs] = useState(0)
-
-  useEffect(() => {
-    if (!isRunning || startedAt === null) return
-
-    const t = setInterval(() => {
-      setElapsedMs(Date.now() - startedAt)
-    }, 250)
-
-    return () => clearInterval(t)
-  }, [isRunning, startedAt])
-
-  const formatted = useMemo(() => formatDuration(elapsedMs), [elapsedMs])
-
-  const onPleaseWait = () => {
-    setCoins((c) => c + 1)
-
-    if (!isRunning) {
-      // Resume from the current elapsed time
-      setStartedAt(Date.now() - elapsedMs)
-      setIsRunning(true)
-      toast.success('Building your app…', {
-        description: "Hang tight — we're setting everything up.",
-      })
-      return
-    }
-
-    setIsRunning(false)
-    toast.info('Still working…', {
-      description: 'You can come back in a moment.',
-    })
-  }
-
-  const onReset = () => {
-    setCoins(0)
-    setIsRunning(false)
-    setStartedAt(null)
-    setElapsedMs(0)
-    toast('Reset complete')
-  }
-
-  const onAddCoin = () => {
-    setCoins((c) => c + 1)
-    toast('Coin added')
-  }
-
+  const {
+    data: projects,
+    isLoading,
+    error,
+  } = useQuery<Project[]>({
+    queryKey: ["projects"],
+    queryFn: fetchProjects,
+  });
+  const stats = {
+    totalBudget:
+      projects?.reduce((acc, project) => acc + project.budget, 0) ?? 0,
+    activeProjects:
+      projects?.filter((p) => p.status === "Active").length ?? 0,
+    completedProjects:
+      projects?.filter((p) => p.status === "Completed").length ?? 0,
+    totalProjects: projects?.length ?? 0,
+  };
+  const chartData = [
+    { name: "Active", count: stats.activeProjects, fill: "hsl(var(--primary))" },
+    { name: "Completed", count: stats.completedProjects, fill: "hsl(var(--chart-2))" },
+    { name: "On Hold", count: projects?.filter(p => p.status === 'On Hold').length ?? 0, fill: "hsl(var(--muted-foreground))" },
+  ];
+  const recentProjects = projects
+    ?.slice()
+    .sort((a, b) => parseISO(b.dueDate).getTime() - parseISO(a.dueDate).getTime())
+    .slice(0, 5);
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4 overflow-hidden relative">
-      <ThemeToggle />
-      <div className="absolute inset-0 bg-gradient-rainbow opacity-10 dark:opacity-20 pointer-events-none" />
-
-      <div className="text-center space-y-8 relative z-10 animate-fade-in w-full">
-        <div className="flex justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-primary floating">
-            <Sparkles className="w-8 h-8 text-white rotating" />
-          </div>
+    <AppLayout>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="py-8 md:py-10 lg:py-12">
+          <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+            <div className="flex items-center">
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                Dashboard
+              </h1>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
+              {isLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-32 w-full" />
+                ))
+              ) : (
+                <>
+                  <StatCard
+                    title="Total Budget"
+                    value={new Intl.NumberFormat("en-US", {
+                      style: "currency",
+                      currency: "USD",
+                    }).format(stats.totalBudget)}
+                    icon={DollarSign}
+                    description="Sum of all project budgets"
+                  />
+                  <StatCard
+                    title="Active Projects"
+                    value={`+${stats.activeProjects}`}
+                    icon={Activity}
+                    description="Projects currently in progress"
+                  />
+                  <StatCard
+                    title="Completed Projects"
+                    value={`+${stats.completedProjects}`}
+                    icon={CheckCircle}
+                    description="Projects successfully finished"
+                  />
+                  <StatCard
+                    title="Total Projects"
+                    value={stats.totalProjects.toString()}
+                    icon={FolderKanban}
+                    description="Total number of projects"
+                  />
+                </>
+              )}
+            </div>
+            <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
+              <Card className="xl:col-span-2">
+                <CardHeader>
+                  <CardTitle>Projects Overview</CardTitle>
+                  <CardDescription>
+                    A summary of projects by status.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pl-2">
+                  {isLoading ? (
+                    <Skeleton className="h-[350px] w-full" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height={350}>
+                      <BarChart data={chartData}>
+                        <XAxis
+                          dataKey="name"
+                          stroke="#888888"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis
+                          stroke="#888888"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(value) => `${value}`}
+                        />
+                        <Tooltip
+                          cursor={{ fill: "hsl(var(--muted))" }}
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--background))",
+                            border: "1px solid hsl(var(--border))",
+                          }}
+                        />
+                        <Legend />
+                        <Bar
+                          dataKey="count"
+                          radius={[4, 4, 0, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center">
+                  <div className="grid gap-2">
+                    <CardTitle>Recent Projects</CardTitle>
+                    <CardDescription>
+                      The latest projects that have been updated.
+                    </CardDescription>
+                  </div>
+                  <Button asChild size="sm" className="ml-auto gap-1">
+                    <Link to="/projects">
+                      View All
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <div className="space-y-4">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Skeleton key={i} className="h-10 w-full" />
+                      ))}
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead className="text-right">Due Date</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {recentProjects?.map((project) => (
+                          <TableRow key={project.id}>
+                            <TableCell>
+                              <div className="font-medium">{project.name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                <Badge
+                                  variant={
+                                    project.priority === "High"
+                                      ? "destructive"
+                                      : project.priority === "Medium"
+                                      ? "default"
+                                      : "secondary"
+                                  }
+                                >
+                                  {project.priority}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {format(parseISO(project.dueDate), "MMM d, yyyy")}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </main>
         </div>
-
-        <div className="space-y-3">
-          <h1 className="text-5xl md:text-7xl font-display font-bold text-balance leading-tight">
-            Creating your <span className="text-gradient">app</span>
-          </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-xl mx-auto text-pretty">
-            Your application would be ready soon.
-          </p>
-        </div>
-
-        {HAS_TEMPLATE_DEMO ? (
-          <div className="max-w-5xl mx-auto text-left">
-            <TemplateDemo />
-          </div>
-        ) : (
-          <>
-            <div className="flex justify-center gap-4">
-              <Button
-                size="lg"
-                onClick={onPleaseWait}
-                className="btn-gradient px-8 py-4 text-lg font-semibold hover:-translate-y-0.5 transition-all duration-200"
-                aria-live="polite"
-              >
-                Please Wait
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
-              <div>
-                Time elapsed:{' '}
-                <span className="font-medium tabular-nums text-foreground">{formatted}</span>
-              </div>
-              <div>
-                Coins:{' '}
-                <span className="font-medium tabular-nums text-foreground">{coins}</span>
-              </div>
-            </div>
-
-            <div className="flex justify-center gap-2">
-              <Button variant="outline" size="sm" onClick={onReset}>
-                Reset
-              </Button>
-              <Button variant="outline" size="sm" onClick={onAddCoin}>
-                Add Coin
-              </Button>
-            </div>
-          </>
-        )}
       </div>
-
-      <footer className="absolute bottom-8 text-center text-muted-foreground/80">
-        <p>Powered by Cloudflare</p>
-      </footer>
-
-      <Toaster richColors closeButton />
-    </div>
-  )
+    </AppLayout>
+  );
 }
