@@ -77,7 +77,10 @@ function updateWranglerJsonc() {
 }
 
 function runSetupCommands() {
-    const commands = [];
+    const commands = [
+    "bun install @tanstack/react-table",
+    "bun install @hono/zod-validator"
+];
     
     if (commands.length === 0) {
         console.log('⊘ No setup commands to run');
